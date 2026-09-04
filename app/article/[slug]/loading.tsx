@@ -1,0 +1,3 @@
+export default function ArticleLoading() {
+  return <main className="site-width pb-16 pt-12"><div className="mx-auto max-w-[780px] animate-pulse text-center"><div className="mx-auto h-7 w-32 rounded-full bg-black/5 dark:bg-white/7"/><div className="mx-auto mt-6 h-12 max-w-[620px] rounded-2xl bg-black/5 dark:bg-white/7"/><div className="mx-auto mt-4 h-6 max-w-[520px] rounded-xl bg-black/5 dark:bg-white/7"/></div><div className="mx-auto mt-10 aspect-[16/9] max-w-[960px] animate-pulse rounded-[28px] bg-black/5 dark:bg-white/7"/><div className="mx-auto mt-12 max-w-[760px] space-y-4 animate-pulse">{[1,2,3,4,5].map((i)=><div key={i} className="h-5 rounded-lg bg-black/5 dark:bg-white/7"/>)}</div></main>;
+}

@@ -1,0 +1,9 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { requireAdmin } from "@/lib/admin";
+import { revalidateAdminContent, revalidateArticleContent } from "@/lib/revalidation";
+
+const itemSchema=z.object({articleId:z.number().int().positive(),sortOrder:z.number().int().min(0),enabled:z.boolean(),customTitle:z.string().trim().max(180).default(""),customExcerpt:z.string().trim().max(500).default(""),imageUrl:z.string().url().or(z.literal("")),startsAt:z.string().datetime().or(z.literal("")),endsAt:z.string().datetime().or(z.literal(""))});
+const schema=z.object({items:z.array(itemSchema).max(5)});
+
+export async function PUT(request:Request){const auth=await requireAdmin();if("error" in auth)return NextResponse.json({error:auth.error},{status:auth.status});const parsed=schema.safeParse(await request.json());if(!parsed.success)return NextResponse.json({error:parsed.error.issues[0]?.message??"轮播配置无效"},{status:400});const rows=parsed.data.items.map((item,index)=>({article_id:item.articleId,sort_order:index,enabled:item.enabled,custom_title:item.customTitle,custom_excerpt:item.customExcerpt,image_url:item.imageUrl,starts_at:item.startsAt||null,ends_at:item.endsAt||null,updated_at:new Date().toISOString()}));const ids=rows.map(row=>row.article_id);let deleteQuery=auth.admin.from("carousel_items").delete().gte("id",0);if(ids.length)deleteQuery=deleteQuery.not("article_id","in",`(${ids.join(",")})`);const {error:deleteError}=await deleteQuery;if(deleteError)return NextResponse.json({error:deleteError.message},{status:500});if(rows.length){const {error}=await auth.admin.from("carousel_items").upsert(rows,{onConflict:"article_id"});if(error)return NextResponse.json({error:error.message},{status:500})}revalidateArticleContent();revalidateAdminContent();return NextResponse.json({ok:true})}

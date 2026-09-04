@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-labelledby="title">
+  <title id="title">NekoPress 默认动态图片</title>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffd8e8"/><stop offset=".5" stop-color="#e9d5ff"/><stop offset="1" stop-color="#bfdbfe"/></linearGradient></defs>
+  <rect width="1200" height="675" fill="url(#g)"/>
+  <circle cx="950" cy="150" r="80" fill="#fff" opacity=".75"/>
+  <path d="M0 520Q220 430 430 520T820 500T1200 430V675H0Z" fill="#fff" opacity=".36"/>
+  <path d="M474 520c-28-75-14-147 35-190l-7-73 63 48a162 162 0 0 1 81 3l66-44-11 77c47 45 55 112 25 179Z" fill="#453650"/>
+  <circle cx="557" cy="385" r="7" fill="#ffb1d0"/><circle cx="641" cy="385" r="7" fill="#ffb1d0"/>
+  <text x="600" y="120" text-anchor="middle" fill="#4b3b58" font-family="ui-rounded,system-ui,sans-serif" font-weight="800" font-size="52">A small moment</text>
+</svg>

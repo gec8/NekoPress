@@ -1,0 +1,4 @@
+import { AdminCarouselManager } from "@/components/admin-carousel-manager";
+import { getAdminArticles, getAdminCarousel } from "@/lib/admin-data";
+
+export default async function CarouselAdminPage(){const [articles,carousel]=await Promise.all([getAdminArticles(),getAdminCarousel()]);if(!articles.ok)return <div className="panel p-6 text-sm text-red-500">文章读取失败：{articles.error}</div>;if(!carousel.ok)return <div className="panel p-6 text-sm text-red-500">轮播配置读取失败：{carousel.error}</div>;return <div><header className="mb-6"><p className="text-xs font-black uppercase tracking-[.2em] text-pink-500">Homepage</p><h1 className="mt-1 text-3xl font-black">首页轮播</h1><p className="mt-2 text-sm text-zinc-500">独立选择内容、调整顺序和展示时间，最多五张。</p></header><AdminCarouselManager articles={articles.data} initial={carousel.data}/></div>}

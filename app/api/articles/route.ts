@@ -1,0 +1,3 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getArticles } from "@/lib/data";
+export async function GET(req:NextRequest){const page=Number(req.nextUrl.searchParams.get("page")||1);const pageSize=Number(req.nextUrl.searchParams.get("pageSize")||6);const category=req.nextUrl.searchParams.get("category")||undefined;const q=req.nextUrl.searchParams.get("q")||undefined;return NextResponse.json(await getArticles({page,pageSize,category,q}));}

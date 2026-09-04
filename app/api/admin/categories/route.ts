@@ -1,0 +1,6 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { requireAdmin } from "@/lib/admin";
+import { revalidatePath } from "next/cache";
+const schema=z.object({items:z.array(z.object({id:z.number().positive().optional(),name:z.string().trim().min(1).max(40),slug:z.string().trim().regex(/^[a-z0-9-]+$/),description:z.string().trim().max(120),color:z.string().regex(/^#[0-9a-fA-F]{6}$/),visible:z.boolean(),sortOrder:z.number().int().min(0)})).max(50)});
+export async function PUT(request:Request){const auth=await requireAdmin();if("error" in auth)return NextResponse.json({error:auth.error},{status:auth.status});const parsed=schema.safeParse(await request.json());if(!parsed.success)return NextResponse.json({error:parsed.error.issues[0]?.message??"分类无效"},{status:400});for(const item of parsed.data.items){const row={name:item.name,slug:item.slug,description:item.description,color:item.color,visible:item.visible,sort_order:item.sortOrder};const query=item.id?auth.admin.from("categories").update(row).eq("id",item.id):auth.admin.from("categories").insert(row);const {error}=await query;if(error)return NextResponse.json({error:error.message},{status:500})}revalidatePath("/");revalidatePath("/admin/taxonomy");return NextResponse.json({ok:true})}

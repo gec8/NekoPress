@@ -1,0 +1,15 @@
+"use client";
+
+import Link from "next/link";
+import { Pencil } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { AdminTableTools } from "@/components/admin-table-tools";
+import { runAdminBulk } from "@/lib/admin-bulk-client";
+import type { AdminMoment } from "@/lib/types";
+
+export function AdminMomentTable({items}:{items:AdminMoment[]}){
+  const router=useRouter();const [selected,setSelected]=useState<number[]>([]);const [busy,setBusy]=useState(false);const [error,setError]=useState("");const ids=items.map(x=>Number(x.id));const all=items.length>0&&selected.length===items.length;
+  async function action(value:string){if(value==="delete"&&!confirm(`确定删除选中的 ${selected.length} 条动态吗？`))return;setBusy(true);setError("");try{await runAdminBulk("moments",selected,value);setSelected([]);router.refresh()}catch(e){setError(e instanceof Error?e.message:"操作失败")}finally{setBusy(false)}}
+  return <div className="panel mt-6 overflow-hidden"><AdminTableTools count={selected.length} busy={busy} onAction={action} actions={[{value:"publish",label:"公开"},{value:"hide",label:"隐藏"},{value:"delete",label:"删除",danger:true}]}/><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b border-black/5 bg-zinc-50/70 text-[11px] font-black uppercase tracking-wide text-zinc-400 dark:border-white/10 dark:bg-white/[.025]"><tr><th className="w-12 px-4 py-3"><input type="checkbox" aria-label="全选本页" checked={all} onChange={()=>setSelected(all?[]:ids)}/></th><th className="px-2 py-3">动态内容</th><th className="px-4 py-3">心情</th><th className="px-4 py-3">状态</th><th className="px-4 py-3">时间</th><th className="px-4 py-3 text-right">操作</th></tr></thead><tbody className="divide-y divide-black/5 dark:divide-white/10">{items.map(item=>{const id=Number(item.id);return <tr key={item.id} className="hover:bg-zinc-50/70 dark:hover:bg-white/[.025]"><td className="px-4 py-3"><input type="checkbox" checked={selected.includes(id)} aria-label="选择动态" onChange={()=>setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id])}/></td><td className="max-w-xl px-2 py-3"><b className="line-clamp-2 text-sm leading-6">{item.content}</b></td><td className="px-4 py-3 text-zinc-500">{item.mood}</td><td className="px-4 py-3"><span className={`rounded-md px-2 py-1 text-[11px] font-black ${item.published?"bg-emerald-500/10 text-emerald-600":"bg-zinc-500/10 text-zinc-500"}`}>{item.published?"已公开":"草稿"}</span></td><td className="px-4 py-3 text-xs text-zinc-500">{item.publishedAt.slice(0,10)}</td><td className="px-4 py-3 text-right"><Link className="inline-flex rounded-lg p-2 text-zinc-500 hover:bg-pink-50 hover:text-pink-500 dark:hover:bg-pink-500/10" href={`/admin/moments/${item.id}`} title="编辑"><Pencil size={15}/></Link></td></tr>})}{items.length===0&&<tr><td colSpan={6} className="p-10 text-center text-zinc-500">还没有动态。</td></tr>}</tbody></table></div>{error&&<p className="border-t border-red-100 px-4 py-3 text-xs text-red-500">{error}</p>}</div>;
+}
