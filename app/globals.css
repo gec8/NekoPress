@@ -87,6 +87,10 @@ button, summary { outline-offset: 3px; }
 .article-body pre { margin: 1.8em 0; overflow-x: auto; border-radius: 16px; background: #111318; padding: 1.25em; color: #f4f4f5; font-size: .86em; line-height: 1.7; }
 .article-body figure { margin: 2em 0; }
 .article-body figcaption { margin-top: .65em; text-align: center; color: #a1a1aa; font-size: .75em; }
+.article-body .content-player { line-height: 1.4; }
+.media-range { height:4px; cursor:pointer; accent-color:#f43f5e; }
+.content-player:fullscreen { display:grid; place-items:center; border:0; border-radius:0; background:#000; }
+.content-player:fullscreen video { max-height:calc(100vh - 76px); }
 .tag-pill { border:1px solid var(--line); border-radius:999px; padding:.38rem .72rem; font-size:.72rem; font-weight:800; color:rgb(113 113 122); transition:.16s ease; }
 .dark .tag-pill { color:rgb(161 161 170); }
 .tag-pill:hover { border-color:rgb(244 63 94 / .2); color:#f43f5e; }

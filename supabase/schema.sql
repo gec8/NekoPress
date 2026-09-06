@@ -103,8 +103,8 @@ values (
   'media',
   'media',
   true,
-  8388608,
-  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']
+  52428800,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'video/mp4', 'video/webm']
 )
 on conflict (id) do update set
   public = excluded.public,

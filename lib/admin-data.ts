@@ -201,7 +201,7 @@ export async function getAdminMomentsPage(pageValue = 1): Promise<AdminDataResul
   return { ok: true, data: { items, page, pageSize: ADMIN_PAGE_SIZE, total, totalPages: Math.max(1, Math.ceil(total / ADMIN_PAGE_SIZE)) } };
 }
 
-export type AdminMediaItem = { name:string; path:string; url:string; createdAt:string; size:number };
+export type AdminMediaItem = { name:string; path:string; url:string; createdAt:string; size:number; mime:string };
 export async function getAdminMedia(): Promise<AdminDataResult<AdminMediaItem[]>> {
   const auth=await requireAdmin();
   if("error" in auth)return {ok:false,error:auth.error??"后台鉴权失败"};
@@ -210,7 +210,7 @@ export async function getAdminMedia(): Promise<AdminDataResult<AdminMediaItem[]>
   if(error)return {ok:false,error:error.message};
   const files=(await Promise.all((folders??[]).map(async(folder)=>{
     const {data}=await auth.admin.storage.from(bucket).list(`uploads/${folder.name}`,{limit:100,sortBy:{column:"created_at",order:"desc"}});
-    return (data??[]).filter(file=>file.metadata).map(file=>{const path=`uploads/${folder.name}/${file.name}`;return {name:file.name,path,url:auth.admin.storage.from(bucket).getPublicUrl(path).data.publicUrl,createdAt:String(file.created_at??""),size:Number(file.metadata?.size??0)}});
+    return (data??[]).filter(file=>file.metadata).map(file=>{const path=`uploads/${folder.name}/${file.name}`;return {name:file.name,path,url:auth.admin.storage.from(bucket).getPublicUrl(path).data.publicUrl,createdAt:String(file.created_at??""),size:Number(file.metadata?.size??0),mime:String(file.metadata?.mimetype??"")}});
   }))).flat().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   return {ok:true,data:files};
 }
