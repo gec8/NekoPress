@@ -8,5 +8,6 @@ const entries = [
 
 export async function CategoryGrid() {
   const configured=await getVisibleCategoryDetails();
+  if (!configured.length) return null;
   return <section><div className="section-heading"><div><span>Explore</span><h2>探索分类</h2></div></div><div className="category-scroll grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{configured.map(item=>{const fallback=entries.find(([name])=>name===item.name);const Icon=fallback?.[1]??Sparkles;return <Link key={item.name} href={`/category/${encodeURIComponent(item.name)}`} className="category-card group"><span className="category-icon" style={{color:item.color}}><Icon size={20}/></span><div><h3 className="font-black tracking-[-.02em] group-hover:text-pink-500">{item.name}</h3><p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{item.description||fallback?.[2]||"浏览这个分类的最新内容"}</p></div></Link>})}</div></section>;
 }

@@ -1,0 +1,3 @@
+"use client";
+
+export default function GlobalError({reset}:{error:Error&{digest?:string};reset:()=>void}){return <html lang="zh-CN"><body style={{margin:0,fontFamily:"system-ui, sans-serif",background:"#fffafb",color:"#18181b"}}><main style={{minHeight:"100vh",display:"grid",placeItems:"center",padding:24,boxSizing:"border-box"}}><section style={{maxWidth:520,textAlign:"center"}}><p style={{color:"#f43f5e",fontWeight:900}}>NEKOPRESS</p><h1>网站暂时无法加载</h1><p style={{color:"#71717a",lineHeight:1.8}}>页面基础服务出现异常，请重新加载。如果问题持续存在，请稍后再试。</p><button type="button" onClick={reset} style={{marginTop:16,border:0,borderRadius:999,background:"#f43f5e",padding:"12px 20px",color:"white",fontWeight:800,cursor:"pointer"}}>重新加载</button></section></main></body></html>}

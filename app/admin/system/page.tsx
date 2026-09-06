@@ -1,0 +1,3 @@
+import { AdminSystemStatus } from "@/components/admin-system-status";
+
+export default function AdminSystemPage(){return <AdminSystemStatus/>}

@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, FileText, Images, LayoutTemplate, MessageSquare, Settings, Sparkles, Tags } from "lucide-react";
+import { Activity, BarChart3, ClipboardList, FileText, Images, LayoutTemplate, MessageSquare, Settings, Sparkles, Tags, Trash2 } from "lucide-react";
 
 const groups = [
   { label:"工作台", items:[{href:"/admin",label:"数据概览",icon:BarChart3,exact:true}] },
   { label:"内容管理", items:[{href:"/admin/articles",label:"文章管理",icon:FileText,exact:false},{href:"/admin/moments",label:"动态管理",icon:Sparkles,exact:false},{href:"/admin/comments",label:"评论审核",icon:MessageSquare,exact:false},{href:"/admin/taxonomy",label:"分类与标签",icon:Tags,exact:false}] },
   { label:"运营管理", items:[{href:"/admin/carousel",label:"首页轮播",icon:LayoutTemplate,exact:false},{href:"/admin/media",label:"媒体库",icon:Images,exact:false}] },
-  { label:"系统管理", items:[{href:"/admin/settings",label:"网站设置",icon:Settings,exact:false,adminOnly:true}] },
+  { label:"系统管理", items:[{href:"/admin/system",label:"系统状态",icon:Activity,exact:false,adminOnly:true},{href:"/admin/audit",label:"操作日志",icon:ClipboardList,exact:false,adminOnly:true},{href:"/admin/trash",label:"文章回收站",icon:Trash2,exact:false,adminOnly:true},{href:"/admin/settings",label:"网站设置",icon:Settings,exact:false,adminOnly:true}] },
 ];
 
 export function AdminNav({ collapsed=false,role, onNavigate }:{ collapsed?:boolean;role:"admin"|"editor"; onNavigate?:()=>void }) {

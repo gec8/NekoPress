@@ -30,9 +30,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   const picks = featured.slice(0, 3);
   return <main className="site-width space-y-14 pb-8 pt-6 sm:space-y-16 sm:pt-8">
     <HeroCarousel items={featured} />
+    {latest.total === 0 && <section className="panel px-6 py-12 text-center"><p className="eyebrow">Ready to publish</p><h1 className="mt-2 text-2xl font-black">还没有已发布的文章</h1><p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">内容服务运行正常，发布第一篇文章后会显示在这里。</p></section>}
     <CategoryGrid />
     {picks.length > 0 && <section><div className="section-heading"><div><span>Editor picks</span><h2>编辑精选</h2></div><p className="hidden max-w-sm text-right text-xs leading-5 text-zinc-400 sm:block">不追求数量，只保留值得停下来读一会儿的内容。</p></div><div className="grid gap-4 md:grid-cols-[1.28fr_.92fr] md:grid-rows-2">{picks[0] && <ArticleCard article={picks[0]} variant="feature"/>}<div className="grid gap-4">{picks.slice(1,3).map((a)=><ArticleCard key={a.id} article={a} variant="compact"/>)}</div></div></section>}
-    <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_290px]"><div><div className="section-heading"><div><span>Latest</span><h2>最新文章</h2></div></div><div className="grid gap-4 md:grid-cols-2">{latest.items.map((a)=><ArticleCard key={a.id} article={a}/>)}</div><Pagination page={latest.page} totalPages={latest.totalPages} basePath="/" /></div><Sidebar hot={hot}/></section>
+    {latest.total > 0 && <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_290px]"><div><div className="section-heading"><div><span>Latest</span><h2>最新文章</h2></div></div><div className="grid gap-4 md:grid-cols-2">{latest.items.map((a)=><ArticleCard key={a.id} article={a}/>)}</div><Pagination page={latest.page} totalPages={latest.totalPages} basePath="/" /></div><Sidebar hot={hot}/></section>}
     <TopicStrip title="动漫与游戏专题" items={anime.length ? anime : featured} />
     <MomentsPreview items={moments} />
     <LifeSection items={merged} />

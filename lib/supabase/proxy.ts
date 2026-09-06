@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAuthFetch } from "@/lib/supabase/fetch";
+import { isSessionExpiredError, safeAdminDestination } from "@/lib/auth-errors";
 
 export async function updateSession(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -19,6 +20,20 @@ export async function updateSession(request: NextRequest) {
       },
     },
   });
-  try { await supabase.auth.getClaims(); } catch { /* The protected layout performs the final authorization check. */ }
+  const isAdminPage = request.nextUrl.pathname.startsWith("/admin");
+  const hasSessionCookie = request.cookies.getAll().some(({ name }) => name.startsWith("sb-") && name.includes("auth-token"));
+  if (isAdminPage && !hasSessionCookie) {
+    const loginUrl = new URL("/auth/login", request.url);
+    loginUrl.searchParams.set("next", safeAdminDestination(`${request.nextUrl.pathname}${request.nextUrl.search}`));
+    return NextResponse.redirect(loginUrl);
+  }
+  try {
+    const { data, error } = await supabase.auth.getClaims();
+    if (isAdminPage && (!data?.claims.sub || isSessionExpiredError(error))) {
+      const loginUrl = new URL("/auth/login", request.url);
+      loginUrl.searchParams.set("next", safeAdminDestination(`${request.nextUrl.pathname}${request.nextUrl.search}`));
+      return NextResponse.redirect(loginUrl);
+    }
+  } catch { /* Network failures are rendered as service errors by the protected DAL. */ }
   return response;
 }

@@ -17,6 +17,15 @@ export type Article = {
 
 export type AdminArticle = Article & {
   published: boolean;
+  deletedAt?: string;
+};
+
+export type ArticleVersion = {
+  id: number;
+  articleId: number;
+  title: string;
+  changeType: "update" | "restore" | "trash";
+  createdAt: string;
 };
 
 export type Comment = {

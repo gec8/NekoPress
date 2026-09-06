@@ -11,7 +11,7 @@ export function CommentSection({ articleId, initial }: { articleId: number; init
   const query = useQuery<Comment[]>({ queryKey: ["comments", articleId], queryFn: async () => { const r = await fetch(`/api/comments?articleId=${articleId}`); if (!r.ok) throw new Error("评论加载失败"); return r.json(); }, initialData: initial });
   const submission = useMutation({
     mutationFn: async () => { const r = await fetch("/api/comments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ articleId, author, message }) }); const payload = await r.json(); if (!r.ok) throw new Error(payload.error ?? "评论提交失败"); return payload; },
-    onSuccess: () => { setMessage(""); setFeedback("评论已提交，审核通过后会公开显示。"); },
+    onSuccess: (payload) => { setMessage(""); setFeedback(payload.pending?"评论已提交，审核通过后会公开显示。":"评论发布成功。"); if(!payload.pending)void query.refetch(); },
     onError: (error) => setFeedback(error.message),
   });
   function submit(e: FormEvent) { e.preventDefault(); if (!author.trim() || !message.trim()) return; setFeedback(""); submission.mutate(); }

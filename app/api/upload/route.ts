@@ -1,40 +1,40 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
+import { inspectImage, MAX_IMAGE_BYTES } from "@/lib/image-validation";
+import { consumeFixedWindow } from "@/lib/request-security";
 
 export const runtime = "nodejs";
-
-const imageExtensions: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/gif": "gif",
-  "image/avif": "avif",
-};
 
 export async function POST(req: Request) {
   const auth = await requireAdmin();
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   try {
+    const contentLength=Number(req.headers.get("content-length")||0);
+    if(contentLength>MAX_IMAGE_BYTES+512*1024)return NextResponse.json({error:"上传内容不能超过 8MB"},{status:413});
+    const limit=consumeFixedWindow(`upload:${auth.userId}`,30,10*60*1000);
+    if(!limit.allowed)return NextResponse.json({error:"上传过于频繁，请稍后重试"},{status:429,headers:{"Retry-After":String(limit.retryAfterSeconds)}});
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) return NextResponse.json({ error: "请选择图片" }, { status: 400 });
-    if (file.size > 8 * 1024 * 1024) return NextResponse.json({ error: "图片不能超过 8MB" }, { status: 413 });
-    const extension = imageExtensions[file.type];
-    if (!extension) return NextResponse.json({ error: "仅支持 JPG、PNG、WebP、GIF 和 AVIF" }, { status: 415 });
+    if (file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: "图片不能超过 8MB" }, { status: 413 });
+    const bytes=Buffer.from(await file.arrayBuffer());
+    const inspection=inspectImage(bytes,file.type);
+    if(!inspection.ok)return NextResponse.json({error:inspection.error},{status:415});
 
     const bucket = process.env.SUPABASE_STORAGE_BUCKET || "media";
-    const objectPath = `uploads/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension}`;
+    const objectPath = `uploads/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${inspection.info.extension}`;
     const { error } = await auth.admin.storage.from(bucket).upload(
       objectPath,
-      Buffer.from(await file.arrayBuffer()),
-      { contentType: file.type, cacheControl: "31536000", upsert: false },
+      bytes,
+      { contentType: inspection.info.mime, cacheControl: "31536000", upsert: false },
     );
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {console.error("[media-upload]",error);return NextResponse.json({ error:"图片存储失败，请稍后重试" }, { status: 500 });}
 
     const { data } = auth.admin.storage.from(bucket).getPublicUrl(objectPath);
-    return NextResponse.json({ url: data.publicUrl });
+    return NextResponse.json({ url: data.publicUrl, width:inspection.info.width, height:inspection.info.height });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "图片上传失败" }, { status: 500 });
+    console.error("[media-upload]",error);
+    return NextResponse.json({ error:"图片上传失败，请稍后重试" }, { status: 500 });
   }
 }

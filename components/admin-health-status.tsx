@@ -4,7 +4,7 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock3, RefreshCw, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-type HealthState = { kind:"checking"|"healthy"|"slow"|"session"|"database"|"network"|"permission"|"configuration"; message:string; latencyMs?:number };
+type HealthState = { kind:"checking"|"healthy"|"degraded"|"slow"|"session"|"database"|"network"|"permission"|"configuration"; message:string; latencyMs?:number };
 
 export function AdminHealthStatus({ compact=false }:{ compact?:boolean }) {
   const [state,setState]=useState<HealthState>({kind:"checking",message:"正在检测后台状态"});
@@ -20,7 +20,7 @@ export function AdminHealthStatus({ compact=false }:{ compact?:boolean }) {
       const latencyMs=Math.round(performance.now()-startedAt);
       if(response.status===401){setState({kind:"session",message:"登录已过期，请重新登录",latencyMs});return;}
       if(!response.ok){const kind=payload.kind==="database"?"database":payload.kind==="permission"?"permission":"configuration";setState({kind,message:payload.message??"后台服务异常",latencyMs});return;}
-      setState(latencyMs>1800?{kind:"slow",message:"服务可用，但当前网络响应较慢",latencyMs}:{kind:"healthy",message:"后台服务正常",latencyMs});
+      setState(payload.kind==="degraded"?{kind:"degraded",message:payload.message??"后台有项目需要处理",latencyMs}:latencyMs>1800?{kind:"slow",message:"服务可用，但当前网络响应较慢",latencyMs}:{kind:"healthy",message:"后台服务正常",latencyMs});
     } catch {
       setState({kind:"network",message:navigator.onLine?"无法连接后台服务，请稍后重试":"设备当前处于离线状态"});
     } finally {
@@ -31,7 +31,7 @@ export function AdminHealthStatus({ compact=false }:{ compact?:boolean }) {
   useEffect(()=>{const initial=window.setTimeout(()=>void check(),0);const interval=window.setInterval(()=>void check(),60000);return()=>{window.clearTimeout(initial);window.clearInterval(interval)}},[check]);
 
   const healthy=state.kind==="healthy";
-  const slow=state.kind==="slow";
+  const slow=state.kind==="slow"||state.kind==="degraded";
   const checkingState=state.kind==="checking";
   const Icon=checkingState||slow?Clock3:healthy?CheckCircle2:state.kind==="network"?WifiOff:AlertTriangle;
   const color=healthy?"border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300":slow||checkingState?"border-amber-200 bg-amber-50/80 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300":"border-red-200 bg-red-50/80 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300";

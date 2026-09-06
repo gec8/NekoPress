@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin";
 import { revalidateAdminContent, revalidateArticleContent, revalidateMomentContent } from "@/lib/revalidation";
+import { recordAdminAudit } from "@/lib/admin-audit";
 
 const schema=z.discriminatedUnion("resource",[
   z.object({resource:z.literal("articles"),ids:z.array(z.number().int().positive()).min(1).max(100),action:z.enum(["publish","hide","delete"])}),
@@ -20,7 +21,7 @@ export async function POST(request:Request){
   if(resource==="articles"){
     if(action==="delete"){
       const previous=await auth.admin.from("articles").select("slug").in("id",ids);
-      const result=await auth.admin.from("articles").delete().in("id",ids);error=result.error;
+      const result=await auth.admin.from("articles").update({deleted_at:new Date().toISOString(),deleted_by:auth.userId,published:false,featured:false}).in("id",ids);error=result.error;
       previous.data?.forEach(row=>revalidateArticleContent(String(row.slug)));
     }else{
       const result=await auth.admin.from("articles").update({published:action==="publish",...(action==="publish"?{published_at:new Date().toISOString()}: {})}).in("id",ids);error=result.error;
@@ -34,6 +35,7 @@ export async function POST(request:Request){
     const result=action==="delete"?await auth.admin.from("comments").delete().in("id",ids):await auth.admin.from("comments").update({approved:action==="approve"}).in("id",ids);error=result.error;
   }
   if(error)return NextResponse.json({error:error.message},{status:500});
+  await recordAdminAudit(auth.admin,{actorId:auth.userId,actorEmail:auth.email,action,resource,resourceId:ids.join(","),label:`批量操作 ${ids.length} 项`,metadata:{count:ids.length}});
   revalidateAdminContent();
   return NextResponse.json({ok:true,count:ids.length});
 }

@@ -30,6 +30,10 @@ body {
   text-rendering: optimizeLegibility;
 }
 a, button { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid rgb(244 63 94 / .78); outline-offset: 3px; }
+.skip-link { position:fixed; left:16px; top:12px; z-index:200; transform:translateY(-160%); border-radius:10px; background:#18181b; padding:10px 14px; color:white; font-size:13px; font-weight:800; transition:transform .15s ease; }
+.skip-link:focus { transform:translateY(0); }
+#main-content:focus, #admin-main-content:focus { outline:none; }
 button, summary { outline-offset: 3px; }
 .site-width { width: min(1180px, calc(100% - 32px)); margin-inline: auto; }
 .panel { border: 1px solid var(--line); border-radius: var(--radius-panel); background: var(--surface); box-shadow: 0 8px 28px rgb(20 20 30 / .025); }
@@ -107,6 +111,7 @@ button, summary { outline-offset: 3px; }
   html { scroll-behavior:auto; }
   *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
   .card:hover, .category-card:hover, .btn-primary:hover { transform:none; }
+  .skip-link { transition:none; }
 }
 
 /* Front-end experience layer */

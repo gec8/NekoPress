@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:unit": "node --no-warnings --experimental-strip-types --test tests/unit/auth-errors.test.ts tests/unit/async.test.ts tests/unit/images.test.ts tests/unit/image-validation.test.ts tests/unit/request-security.test.ts",
+    "test:integration": "node scripts/run-integration-tests.mjs",
+    "test": "npm run test:unit && npm run build && npm run test:integration",
+    "check": "npm run lint && npm run test",
+    "check:production-env": "node scripts/validate-production-env.mjs",
+    "deploy:check": "npm run check:production-env && npm run check"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",

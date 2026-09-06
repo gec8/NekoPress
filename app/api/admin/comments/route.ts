@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin";
-import { revalidateAdminContent } from "@/lib/revalidation";
+import { revalidateAdminContent, revalidateCommentContent } from "@/lib/revalidation";
+import { recordAdminAudit } from "@/lib/admin-audit";
 
 const moderationSchema = z.object({
   id: z.string().uuid(),
@@ -21,6 +21,7 @@ export async function PATCH(req: NextRequest) {
     .select("id")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await recordAdminAudit(auth.admin,{actorId:auth.userId,actorEmail:auth.email,action:parsed.data.approved?"approve":"hide",resource:"comments",resourceId:parsed.data.id});
   revalidateAdminContent();
   revalidatePathForComments();
   return NextResponse.json(data);
@@ -35,6 +36,7 @@ export async function DELETE(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "无效的评论 id" }, { status: 400 });
   const { error } = await auth.admin.from("comments").delete().eq("id", parsed.data);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await recordAdminAudit(auth.admin,{actorId:auth.userId,actorEmail:auth.email,action:"delete",resource:"comments",resourceId:parsed.data});
   revalidateAdminContent();
   revalidatePathForComments();
   return NextResponse.json({ ok: true });
@@ -43,5 +45,5 @@ export async function DELETE(req: NextRequest) {
 function revalidatePathForComments() {
   // Public comments are also fetched dynamically, while this refreshes any
   // server-rendered initial comment lists that may exist in production caches.
-  revalidatePath("/article/[slug]", "page");
+  revalidateCommentContent();
 }

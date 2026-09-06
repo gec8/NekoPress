@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/admin";
-import type { AdminArticle, AdminComment, AdminMoment, CarouselItem, CategoryItem, SiteSettings } from "@/lib/types";
+import type { AdminArticle, AdminComment, AdminMoment, ArticleVersion, CarouselItem, CategoryItem, SiteSettings } from "@/lib/types";
 
 export type AdminDataResult<T> =
   | { ok: true; data: T }
@@ -25,8 +25,10 @@ function safeSearch(value: string) {
 }
 
 function mapArticle(row: Record<string, unknown>): AdminArticle {
-  return { id:Number(row.id), slug:String(row.slug), title:String(row.title), excerpt:String(row.excerpt??""), content:Array.isArray(row.content)?row.content.map(String):[], category:String(row.category??"未分类"), author:String(row.author??"Neko"), publishedAt:String(row.published_at??""), readMinutes:Number(row.read_minutes??1), views:Number(row.views??0), likes:Number(row.likes??0), imageUrl:String(row.image_url??""), featured:Boolean(row.featured), published:Boolean(row.published), tags:Array.isArray(row.tags)?row.tags.map(String):[] };
+  return { id:Number(row.id), slug:String(row.slug), title:String(row.title), excerpt:String(row.excerpt??""), content:Array.isArray(row.content)?row.content.map(String):[], category:String(row.category??"未分类"), author:String(row.author??"Neko"), publishedAt:String(row.published_at??""), readMinutes:Number(row.read_minutes??1), views:Number(row.views??0), likes:Number(row.likes??0), imageUrl:String(row.image_url??""), featured:Boolean(row.featured), published:Boolean(row.published), tags:Array.isArray(row.tags)?row.tags.map(String):[],deletedAt:String(row.deleted_at??"") };
 }
+
+function missingTrashSchema(error:{message?:string}|null){return Boolean(error?.message?.includes("deleted_at"))}
 
 export type AdminDashboardData = {
   articleTotal:number; publishedArticles:number; draftArticles:number; missingCovers:number;
@@ -40,15 +42,18 @@ export type AdminDashboardData = {
 export async function getAdminDashboardData():Promise<AdminDataResult<AdminDashboardData>>{
   const auth=await requireAdmin();
   if("error" in auth)return {ok:false,error:auth.error??"后台鉴权失败"};
-  const [articlesResult,momentsResult,commentsCountResult,pendingCommentsResult]=await Promise.all([
-    auth.admin.from("articles").select("id,title,category,published,published_at,views,image_url").order("published_at",{ascending:false}),
+  const [initialArticlesResult,momentsResult,commentsCountResult,pendingCommentsResult]=await Promise.all([
+    auth.admin.from("articles").select("id,title,category,published,published_at,views,image_url,deleted_at").is("deleted_at",null).order("published_at",{ascending:false}),
     auth.admin.from("moments").select("id,published"),
     auth.admin.from("comments").select("id",{count:"exact",head:true}),
     auth.admin.from("comments").select("id,author,message,created_at",{count:"exact"}).eq("approved",false).order("created_at",{ascending:false}).limit(4),
   ]);
-  const error=articlesResult.error??momentsResult.error??commentsCountResult.error??pendingCommentsResult.error;
+  let articleRows: Record<string, unknown>[] | null=initialArticlesResult.data;
+  let articleError=initialArticlesResult.error;
+  if(missingTrashSchema(articleError)){const legacy=await auth.admin.from("articles").select("id,title,category,published,published_at,views,image_url").order("published_at",{ascending:false});articleRows=legacy.data?.map(row=>({...row,deleted_at:null}))??null;articleError=legacy.error}
+  const error=articleError??momentsResult.error??commentsCountResult.error??pendingCommentsResult.error;
   if(error)return {ok:false,error:error.message};
-  const articles=articlesResult.data??[];const moments=momentsResult.data??[];const today=new Date();
+  const articles=articleRows??[];const moments=momentsResult.data??[];const today=new Date();
   const publishingTrend=Array.from({length:7},(_,index)=>{const date=new Date(today);date.setDate(today.getDate()-(6-index));const key=date.toISOString().slice(0,10);return {label:`${date.getMonth()+1}/${date.getDate()}`,value:articles.filter(item=>item.published&&String(item.published_at??"").slice(0,10)===key).length}});
   return {ok:true,data:{articleTotal:articles.length,publishedArticles:articles.filter(x=>x.published).length,draftArticles:articles.filter(x=>!x.published).length,missingCovers:articles.filter(x=>!String(x.image_url??"").trim()).length,momentTotal:moments.length,publishedMoments:moments.filter(x=>x.published).length,commentTotal:commentsCountResult.count??0,pendingCommentTotal:pendingCommentsResult.count??0,totalViews:articles.reduce((sum,x)=>sum+Number(x.views??0),0),recentArticles:articles.slice(0,5).map(x=>({id:Number(x.id),title:String(x.title),category:String(x.category??"未分类"),published:Boolean(x.published),publishedAt:String(x.published_at??"")})),popularArticles:[...articles].sort((a,b)=>Number(b.views??0)-Number(a.views??0)).slice(0,5).map(x=>({id:Number(x.id),title:String(x.title),views:Number(x.views??0)})),pendingComments:(pendingCommentsResult.data??[]).map(x=>({id:String(x.id),author:String(x.author),message:String(x.message),createdAt:String(x.created_at)})),publishingTrend}};
 }
@@ -56,10 +61,12 @@ export async function getAdminDashboardData():Promise<AdminDataResult<AdminDashb
 export async function getAdminArticles(): Promise<AdminDataResult<AdminArticle[]>> {
   const auth = await requireAdmin();
   if ("error" in auth) return { ok: false, error: auth.error ?? "后台鉴权失败" };
-  const { data, error } = await auth.admin
+  let { data, error } = await auth.admin
     .from("articles")
-    .select("id,slug,title,excerpt,category,author,published_at,read_minutes,views,likes,image_url,featured,published,tags")
+    .select("id,slug,title,excerpt,category,author,published_at,read_minutes,views,likes,image_url,featured,published,tags,deleted_at")
+    .is("deleted_at",null)
     .order("published_at", { ascending:false });
+  if(missingTrashSchema(error)){const legacy=await auth.admin.from("articles").select("id,slug,title,excerpt,category,author,published_at,read_minutes,views,likes,image_url,featured,published,tags").order("published_at",{ascending:false});data=legacy.data?.map(row=>({...row,deleted_at:null}))??null;error=legacy.error}
   if (error || !data) return { ok: false, error: error?.message ?? "文章读取失败" };
   return { ok: true, data: data.map(mapArticle) };
 }
@@ -69,7 +76,8 @@ export async function getAdminArticle(id:number): Promise<AdminDataResult<AdminA
   if ("error" in auth) return { ok: false, error: auth.error ?? "后台鉴权失败" };
   const { data, error } = await auth.admin.from("articles").select("*").eq("id",id).maybeSingle();
   if (error) return { ok: false, error: error.message };
-  return { ok: true, data: data ? mapArticle(data) : null };
+  const article=data?mapArticle(data):null;
+  return { ok: true, data: article?.deletedAt ? null : article };
 }
 
 export async function getAdminArticlesPage(input: { page?: number; q?: string; status?: string } = {}): Promise<AdminDataResult<AdminPage<AdminArticle>>> {
@@ -79,15 +87,36 @@ export async function getAdminArticlesPage(input: { page?: number; q?: string; s
   const q = safeSearch(input.q ?? "");
   let query = auth.admin
     .from("articles")
-    .select("id,slug,title,excerpt,category,author,published_at,read_minutes,views,likes,image_url,featured,published,tags", { count: "exact" });
+    .select("id,slug,title,excerpt,category,author,published_at,read_minutes,views,likes,image_url,featured,published,tags,deleted_at", { count: "exact" })
+    .is("deleted_at",null);
   if (q) query = query.or(`title.ilike.%${q}%,slug.ilike.%${q}%,category.ilike.%${q}%`);
   if (input.status === "published") query = query.eq("published", true);
   if (input.status === "draft") query = query.eq("published", false);
   if (input.status === "featured") query = query.eq("featured", true);
-  const { data, error, count } = await query.order("published_at", { ascending: false }).range(from, to);
+  let { data, error, count } = await query.order("published_at", { ascending: false }).range(from, to);
+  if(missingTrashSchema(error)){
+    let legacy=auth.admin.from("articles").select("id,slug,title,excerpt,category,author,published_at,read_minutes,views,likes,image_url,featured,published,tags",{count:"exact"});
+    if(q)legacy=legacy.or(`title.ilike.%${q}%,slug.ilike.%${q}%,category.ilike.%${q}%`);
+    if(input.status==="published")legacy=legacy.eq("published",true);if(input.status==="draft")legacy=legacy.eq("published",false);if(input.status==="featured")legacy=legacy.eq("featured",true);
+    const result=await legacy.order("published_at",{ascending:false}).range(from,to);data=result.data?.map(row=>({...row,deleted_at:null}))??null;error=result.error;count=result.count;
+  }
   if (error || !data) return { ok: false, error: error?.message ?? "文章读取失败" };
   const total = count ?? 0;
   return { ok: true, data: { items: data.map(mapArticle), page, pageSize: ADMIN_PAGE_SIZE, total, totalPages: Math.max(1, Math.ceil(total / ADMIN_PAGE_SIZE)) } };
+}
+
+export async function getAdminTrashArticles():Promise<AdminDataResult<AdminArticle[]>>{
+  const auth=await requireAdmin();if("error" in auth)return{ok:false,error:auth.error??"后台鉴权失败"};
+  const {data,error}=await auth.admin.from("articles").select("*").not("deleted_at","is",null).order("deleted_at",{ascending:false});
+  if(error)return{ok:false,error:missingTrashSchema(error)?"请先执行文章回收站数据库迁移":error.message};
+  return{ok:true,data:(data??[]).map(mapArticle)};
+}
+
+export async function getAdminArticleVersions(articleId:number):Promise<AdminDataResult<ArticleVersion[]>>{
+  const auth=await requireAdmin();if("error" in auth)return{ok:false,error:auth.error??"后台鉴权失败"};
+  const {data,error}=await auth.admin.from("article_versions").select("id,article_id,snapshot,change_type,created_at").eq("article_id",articleId).order("created_at",{ascending:false}).limit(30);
+  if(error)return{ok:false,error:error.message.includes("article_versions")?"请先执行文章版本历史数据库迁移":error.message};
+  return{ok:true,data:(data??[]).map(row=>({id:Number(row.id),articleId:Number(row.article_id),title:String((row.snapshot as Record<string,unknown>)?.title??"未命名版本"),changeType:String(row.change_type) as ArticleVersion["changeType"],createdAt:String(row.created_at)}))};
 }
 
 export async function getAdminComments(): Promise<AdminDataResult<AdminComment[]>> {
