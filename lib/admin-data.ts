@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/admin";
+import { getMediaMime, getStoredMediaDisplayName } from "@/lib/media-types";
 import type { AdminArticle, AdminComment, AdminMoment, ArticleVersion, CarouselItem, CategoryItem, SiteSettings } from "@/lib/types";
 
 export type AdminDataResult<T> =
@@ -206,11 +207,21 @@ export async function getAdminMedia(): Promise<AdminDataResult<AdminMediaItem[]>
   const auth=await requireAdmin();
   if("error" in auth)return {ok:false,error:auth.error??"后台鉴权失败"};
   const bucket=process.env.SUPABASE_STORAGE_BUCKET||"media";
-  const {data:folders,error}=await auth.admin.storage.from(bucket).list("uploads",{limit:100,sortBy:{column:"name",order:"desc"}});
-  if(error)return {ok:false,error:error.message};
+  const listFolder = async (path: string, column: "name" | "created_at" = "name") => {
+    const options = { limit: 100, sortBy: { column, order: "desc" as const } };
+    let result = await auth.admin.storage.from(bucket).list(path, options);
+    if (result.error) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      result = await auth.admin.storage.from(bucket).list(path, options);
+    }
+    return result;
+  };
+  const {data:folders,error}=await listFolder("uploads");
+  if(error){console.error("[admin-media-list]",error);return {ok:false,error:"媒体存储服务暂时不可用，请稍后重试"};}
   const files=(await Promise.all((folders??[]).map(async(folder)=>{
-    const {data}=await auth.admin.storage.from(bucket).list(`uploads/${folder.name}`,{limit:100,sortBy:{column:"created_at",order:"desc"}});
-    return (data??[]).filter(file=>file.metadata).map(file=>{const path=`uploads/${folder.name}/${file.name}`;return {name:file.name,path,url:auth.admin.storage.from(bucket).getPublicUrl(path).data.publicUrl,createdAt:String(file.created_at??""),size:Number(file.metadata?.size??0),mime:String(file.metadata?.mimetype??"")}});
+    const {data,error:folderError}=await listFolder(`uploads/${folder.name}`,"created_at");
+    if(folderError)console.error("[admin-media-folder]",folder.name,folderError);
+    return (data??[]).filter(file=>file.metadata).map(file=>{const path=`uploads/${folder.name}/${file.name}`;const storedName=file.metadata?.originalName??file.metadata?.metadata?.originalName;const metadataName=typeof storedName==="string"&&storedName.trim()?storedName:"";const name=metadataName||getStoredMediaDisplayName(path)||file.name;return {name,path,url:auth.admin.storage.from(bucket).getPublicUrl(path).data.publicUrl,createdAt:String(file.created_at??""),size:Number(file.metadata?.size??0),mime:getMediaMime(String(file.metadata?.mimetype??""),path)}});
   }))).flat().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   return {ok:true,data:files};
 }

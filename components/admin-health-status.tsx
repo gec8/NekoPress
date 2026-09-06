@@ -2,22 +2,25 @@
 
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock3, RefreshCw, WifiOff } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type HealthState = { kind:"checking"|"healthy"|"degraded"|"slow"|"session"|"database"|"network"|"permission"|"configuration"; message:string; latencyMs?:number };
 
 export function AdminHealthStatus({ compact=false }:{ compact?:boolean }) {
   const [state,setState]=useState<HealthState>({kind:"checking",message:"正在检测后台状态"});
   const [checking,setChecking]=useState(false);
+  const lastChecked=useRef(0);
   const check=useCallback(async()=>{
+    if(!navigator.onLine){setState({kind:"network",message:"设备当前处于离线状态"});return}
     setChecking(true);
     const startedAt=performance.now();
     const controller=new AbortController();
     const timer=window.setTimeout(()=>controller.abort(),10000);
     try {
-      const response=await fetch("/api/admin/health",{cache:"no-store",signal:controller.signal});
+      const response=await fetch("/api/admin/health?mode=quick",{cache:"no-store",signal:controller.signal});
       const payload=await response.json();
       const latencyMs=Math.round(performance.now()-startedAt);
+      lastChecked.current=Date.now();
       if(response.status===401){setState({kind:"session",message:"登录已过期，请重新登录",latencyMs});return;}
       if(!response.ok){const kind=payload.kind==="database"?"database":payload.kind==="permission"?"permission":"configuration";setState({kind,message:payload.message??"后台服务异常",latencyMs});return;}
       setState(payload.kind==="degraded"?{kind:"degraded",message:payload.message??"后台有项目需要处理",latencyMs}:latencyMs>1800?{kind:"slow",message:"服务可用，但当前网络响应较慢",latencyMs}:{kind:"healthy",message:"后台服务正常",latencyMs});
@@ -28,7 +31,7 @@ export function AdminHealthStatus({ compact=false }:{ compact?:boolean }) {
       setChecking(false);
     }
   },[]);
-  useEffect(()=>{const initial=window.setTimeout(()=>void check(),0);const interval=window.setInterval(()=>void check(),60000);return()=>{window.clearTimeout(initial);window.clearInterval(interval)}},[check]);
+  useEffect(()=>{const runIfActive=()=>{if(document.visibilityState==="visible"&&navigator.onLine)void check()};const resume=()=>{if(document.visibilityState==="visible"&&Date.now()-lastChecked.current>=300000)void check()};const initial=window.setTimeout(runIfActive,0);const interval=window.setInterval(runIfActive,300000);window.addEventListener("online",runIfActive);document.addEventListener("visibilitychange",resume);return()=>{window.clearTimeout(initial);window.clearInterval(interval);window.removeEventListener("online",runIfActive);document.removeEventListener("visibilitychange",resume)}},[check]);
 
   const healthy=state.kind==="healthy";
   const slow=state.kind==="slow"||state.kind==="degraded";

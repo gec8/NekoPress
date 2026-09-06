@@ -1,7 +1,18 @@
-import { FileAudio, FileVideo } from "lucide-react";
-import { AdminMediaDelete } from "@/components/admin-media-delete";
-import { AdminMediaUpload } from "@/components/admin-media-upload";
-import { SafeImage } from "@/components/safe-image";
+import { AdminMediaManager } from "@/components/admin-media-manager";
 import { getAdminMedia } from "@/lib/admin-data";
 
-export default async function MediaPage(){const result=await getAdminMedia();return <div><header className="flex items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-pink-500">Media</p><h1 className="mt-1 text-3xl font-black">媒体库</h1><p className="mt-2 text-sm text-zinc-500">图片最大 8MB；MP3/WAV/OGG 音频和 MP4/WebM 视频最大 50MB。</p></div><AdminMediaUpload/></header>{!result.ok?<div className="panel mt-6 p-6 text-sm text-red-500">媒体库读取失败：{result.error}</div>:<div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{result.data.length===0&&<div className="panel col-span-full p-8 text-center text-sm text-zinc-500">媒体库还是空的，上传第一个文件吧。</div>}{result.data.map(item=><article className="panel overflow-hidden" key={item.path}><div className="relative grid aspect-[4/3] place-items-center bg-black/5 dark:bg-white/5">{item.mime.startsWith("image/")?<SafeImage src={item.url} alt={item.name} fill sizes="(max-width:640px) 100vw, 33vw" className="object-cover"/>:item.mime.startsWith("video/")?<video controls preload="metadata" className="h-full w-full" src={item.url}/>:<div className="w-full px-5 text-center"><FileAudio className="mx-auto mb-5 text-pink-500" size={42}/><audio controls preload="metadata" className="w-full" src={item.url}/></div>}{item.mime.startsWith("video/")&&<FileVideo className="pointer-events-none absolute right-3 top-3 text-white drop-shadow" size={20}/>}</div><div className="p-4"><p className="truncate text-xs font-bold">{item.name}</p><p className="mt-1 text-[11px] text-zinc-400">{item.mime||"媒体文件"} · {(item.size/1024/1024).toFixed(1)} MB · {item.createdAt.slice(0,10)}</p><input aria-label="媒体地址" readOnly value={item.url} className="mt-3 w-full rounded-lg bg-black/5 px-2 py-1.5 text-[10px] text-zinc-500 outline-none dark:bg-white/5"/><AdminMediaDelete path={item.path}/></div></article>)}</div>}</div>}
+export default async function MediaPage() {
+  const result = await getAdminMedia();
+  return (
+    <div>
+      {!result.ok ? (
+        <>
+          <h1 className="text-3xl font-black">媒体库</h1>
+          <div className="panel mt-6 p-6 text-sm text-red-500">媒体库读取失败：{result.error}</div>
+        </>
+      ) : (
+        <AdminMediaManager initialItems={result.data} />
+      )}
+    </div>
+  );
+}
