@@ -11,6 +11,13 @@ export function isSessionExpiredError(error: unknown) {
   ].some((value) => text.includes(value));
 }
 
+export function isAuthNetworkError(error:unknown){
+  if(!error)return false;
+  const candidate=error as {name?:unknown;message?:unknown;status?:unknown};
+  const text=`${String(candidate.name??"")} ${String(candidate.message??"")}`.toLowerCase();
+  return candidate.status===0||text.includes("authretryablefetcherror")||text.includes("fetch failed")||text.includes("network request failed");
+}
+
 export function safeAdminDestination(value: string | null | undefined) {
   if (!value || value.startsWith("//") || !(value === "/admin" || value.startsWith("/admin/") || value.startsWith("/admin?"))) return "/admin";
   return value;

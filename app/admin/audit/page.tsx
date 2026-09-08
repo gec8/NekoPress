@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/admin";
 
-const actionLabels:Record<string,string>={create:"新建",update:"修改",trash:"移入回收站",restore:"恢复",destroy:"永久删除",publish:"发布",hide:"隐藏",delete:"删除",approve:"通过审核",export:"导出"};
-const resourceLabels:Record<string,string>={articles:"文章",moments:"动态",comments:"评论",backup:"备份"};
+const actionLabels:Record<string,string>={create:"新建",update:"修改",trash:"移入回收站",restore:"恢复",destroy:"永久删除",publish:"发布",hide:"隐藏",delete:"删除",approve:"通过审核",export:"导出",upload:"上传",repair:"修复"};
+const resourceLabels:Record<string,string>={articles:"文章",moments:"动态",comments:"评论",backup:"备份",media:"媒体"};
 
 export default async function AdminAuditPage(){
   const auth=await requireAdmin();

@@ -3,6 +3,7 @@ export type MediaKind = "image" | "audio" | "video";
 export const MEDIA_FILE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,image/avif,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,video/mp4,video/webm";
 export const MAX_CLIENT_IMAGE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLIENT_AUDIO_VIDEO_BYTES = 50 * 1024 * 1024;
+export const RESUMABLE_MEDIA_THRESHOLD = 6 * 1024 * 1024;
 
 const extensionKinds: Record<string, MediaKind> = {
   avif: "image",

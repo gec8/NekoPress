@@ -1,12 +1,13 @@
 import { articles, categories, initialComments } from "@/lib/mock-data";
 import type { Article, CategoryItem, Comment, PaginatedArticles, SiteSettings } from "@/lib/types";
 import { createPublicClientSafe } from "@/lib/supabase/public";
-import { articleImage } from "@/lib/images";
+import { articleImage, randomOnlineImage } from "@/lib/images";
 import { withTimeout } from "@/lib/async";
 import { unstable_cache } from "next/cache";
 import { PUBLIC_CACHE_TAGS } from "@/lib/cache-tags";
 
 const allowDemoData = process.env.NODE_ENV !== "production";
+const demoArticles=articles.map(article=>({...article,imageUrl:randomOnlineImage(`demo-${article.slug}`)}));
 
 export type PublicDataErrorKind = "configuration" | "unavailable";
 
@@ -40,7 +41,7 @@ function mapArticle(row: Record<string, unknown>): Article {
     readMinutes: Number(row.read_minutes ?? row.readMinutes ?? 1),
     views: Number(row.views ?? 0),
     likes: Number(row.likes ?? 0),
-    imageUrl: articleImage(String(row.image_url ?? row.imageUrl ?? "")),
+    imageUrl: articleImage(String(row.image_url ?? row.imageUrl ?? ""),String(row.slug??row.id??"default")),
     featured: Boolean(row.featured),
     tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
   };
@@ -64,7 +65,7 @@ async function queryArticles(input: { page?: number; pageSize?: number; category
     if (!allowDemoData) databaseFailure(error);
   }
 
-  let list = [...articles];
+  let list = [...demoArticles];
   if (input.category && input.category !== "全部") list = list.filter((a) => a.category === input.category);
   if (input.q) {
     const q = input.q.toLowerCase();
@@ -83,10 +84,10 @@ async function queryArticleBySlug(slug: string): Promise<Article | null> {
     const result=await withTimeout(supabase.from("articles").select("*").eq("slug", slug).eq("published", true).lte("published_at",new Date().toISOString()).maybeSingle());
     const { data, error }=result??{data:null,error:"timeout"};
     if (!error && data) return mapArticle(data);
-    if (!error) return allowDemoData ? articles.find((a) => a.slug === slug) ?? null : null;
+    if (!error) return allowDemoData ? demoArticles.find((a) => a.slug === slug) ?? null : null;
     if (!allowDemoData) databaseFailure(error);
   }
-  return articles.find((a) => a.slug === slug) ?? null;
+  return demoArticles.find((a) => a.slug === slug) ?? null;
 }
 
 export const getArticleBySlug = unstable_cache(queryArticleBySlug, ["article-by-slug-v1"], { tags: [PUBLIC_CACHE_TAGS.articles], revalidate: 120 });
@@ -95,7 +96,7 @@ async function queryFeaturedArticles(): Promise<Article[]> {
   const supabase = requirePublicClient(createPublicClientSafe());
   if (supabase) {
     const result=await withTimeout(supabase.from("carousel_items").select("sort_order,custom_title,custom_excerpt,image_url,article:articles(*)").eq("enabled", true).order("sort_order").limit(5));
-    if(result===null){if(!allowDemoData)databaseFailure("timeout");const demoFeatured=articles.filter(article=>article.featured);return (demoFeatured.length?demoFeatured:articles).slice(0,4)}
+    if(result===null){if(!allowDemoData)databaseFailure("timeout");const demoFeatured=demoArticles.filter(article=>article.featured);return (demoFeatured.length?demoFeatured:demoArticles).slice(0,4)}
     if (result.error && !allowDemoData) databaseFailure(result.error);
     const data=result?.data;
     if (data?.length) {
@@ -116,8 +117,8 @@ async function queryFeaturedArticles(): Promise<Article[]> {
   // A fresh CMS database is intentionally empty. Keep the homepage hero useful
   // until the first published articles are created in the admin area.
   if (allowDemoData) {
-    const demoFeatured = articles.filter((article) => article.featured);
-    return (demoFeatured.length ? demoFeatured : articles).slice(0, 4);
+    const demoFeatured = demoArticles.filter((article) => article.featured);
+    return (demoFeatured.length ? demoFeatured : demoArticles).slice(0, 4);
   }
   return [];
 }
@@ -174,11 +175,11 @@ async function queryMoments() {
   const supabase = requirePublicClient(createPublicClientSafe());
   if (supabase) {
     const result=await withTimeout(supabase.from("moments").select("id,content,mood,published_at,tags,image_url").eq("published", true).order("published_at", { ascending: false }).limit(30));const {data,error}=result??{data:null,error:"timeout"};
-    if (!error && data?.length) return data.map((row) => ({ id: String(row.id), content: String(row.content), mood: String(row.mood ?? "动态"), publishedAt: String(row.published_at ?? ""), tags: Array.isArray(row.tags) ? row.tags.map(String) : [], imageUrl: String(row.image_url ?? "") }));
+    if (!error && data?.length) return data.map((row) => ({ id: String(row.id), content: String(row.content), mood: String(row.mood ?? "动态"), publishedAt: String(row.published_at ?? ""), tags: Array.isArray(row.tags) ? row.tags.map(String) : [], imageUrl: String(row.image_url ?? "").trim()||randomOnlineImage(`moment-${row.id}`,1200,675) }));
     if (!error && !allowDemoData) return [];
     if (error && !allowDemoData) databaseFailure(error);
   }
-  return moments;
+  return moments.map(moment=>({...moment,imageUrl:moment.imageUrl||randomOnlineImage(`moment-${moment.id}`,1200,675)}));
 }
 
 export const getMoments = unstable_cache(queryMoments, ["moments-v1"], { tags: [PUBLIC_CACHE_TAGS.moments], revalidate: 120 });

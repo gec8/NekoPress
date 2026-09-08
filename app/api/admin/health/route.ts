@@ -31,14 +31,15 @@ export async function GET(request:Request) {
   }
   const bucket=process.env.SUPABASE_STORAGE_BUCKET||"media";
   const includeStorage=mode==="full";
-  const [database,migration]=await Promise.all([
+  const [database,migration,mediaCatalog]=await Promise.all([
     timedCheck(async()=>auth.admin.from("site_settings").select("id").limit(1),"数据库连接正常","数据库读取异常"),
     timedCheck(async()=>auth.admin.from("article_versions").select("id").limit(1),"回收站迁移已启用","尚未执行回收站迁移"),
+    timedCheck(async()=>auth.admin.from("media_assets").select("id").limit(1),"媒体资产与引用表已启用","尚未执行媒体资产迁移"),
   ]);
   const storage:Check=includeStorage
     ?await timedCheck(async()=>{const {data,error}=await auth.admin.storage.getBucket(bucket);return {error:error??(!data?{message:`找不到 ${bucket} 存储桶`}:null)}},"媒体存储正常","媒体存储异常")
     :{ok:true,latencyMs:0,message:"等待手动检测",skipped:true};
-  const checks:Record<string,Check>={authentication:{ok:true,latencyMs:0,message:"登录与后台权限正常"},database,storage,migration};
+  const checks:Record<string,Check>={authentication:{ok:true,latencyMs:0,message:"登录与后台权限正常"},database,storage,migration,mediaCatalog};
   const coreHealthy=database.ok;
   const allHealthy=Object.values(checks).filter(item=>!item.skipped).every(item=>item.ok);
   return NextResponse.json(

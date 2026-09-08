@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { z } from "zod";
 import { supabaseAuthFetch } from "@/lib/supabase/fetch";
 import { checkLoginLimit, clearLoginFailures, recordLoginFailure } from "@/lib/auth-rate-limit";
+import { isAuthNetworkError } from "@/lib/auth-errors";
 
 const schema=z.object({email:z.string().email(),password:z.string().min(1)});
 
@@ -27,6 +28,7 @@ export async function POST(request:Request){
   } catch {
     return NextResponse.json({error:"登录服务暂时无法连接，请稍后重试",kind:"network"},{status:502});
   }
+  if(isAuthNetworkError(error))return NextResponse.json({error:"登录服务暂时无法连接，请稍后重试",kind:"network"},{status:502});
   if(error||!data.user){recordLoginFailure(attemptKey);return NextResponse.json({error:"邮箱或密码不正确",kind:"credentials"},{status:401});}
   let profileResult;
   try { profileResult=await supabase.from("profiles").select("role").eq("id",data.user.id).maybeSingle(); }

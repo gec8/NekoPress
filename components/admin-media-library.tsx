@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, FileAudio, FileImage, FileVideo, Search, Trash2 } from "lucide-react";
+import { Check, Copy, FileAudio, FileImage, FileVideo, Play, Search, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AdminMediaDelete } from "@/components/admin-media-delete";
@@ -10,6 +10,9 @@ import type { AdminMediaItem } from "@/lib/admin-data";
 import { getMediaKind, getMediaKindLabel } from "@/lib/media-types";
 
 type MediaFilter = "all" | "image" | "audio" | "video";
+type UsageFilter="all"|"used"|"unused";
+type MediaSort="newest"|"oldest"|"largest"|"name";
+const MEDIA_PAGE_SIZE=18;
 
 const filters: Array<{ key: MediaFilter; label: string }> = [
   { key: "all", label: "全部" },
@@ -31,9 +34,13 @@ function formatDuration(seconds: number) {
 
 function MediaCard({ item, onDeleted }: { item: AdminMediaItem; onDeleted: (path: string) => void }) {
   const type = getMediaType(item);
-  const [details, setDetails] = useState("");
+  const [details, setDetails] = useState(item.width&&item.height?`${item.width} × ${item.height}`:item.duration?formatDuration(item.duration):"");
+  const [previewActive,setPreviewActive]=useState(false);
   const typeLabel = getMediaKindLabel(type);
   const TypeIcon = type === "image" ? FileImage : type === "audio" ? FileAudio : FileVideo;
+  function rememberMetadata(values:{width?:number;height?:number;duration?:number}){
+    void fetch("/api/admin/media",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({path:item.path,...values})});
+  }
 
   return (
     <article className="panel overflow-hidden">
@@ -51,21 +58,22 @@ function MediaCard({ item, onDeleted }: { item: AdminMediaItem; onDeleted: (path
             src={item.url}
           />
         ) : type === "video" ? (
-          <video
-            className="h-full w-full bg-black object-contain"
-            controls
-            onLoadedMetadata={(event) => setDetails(formatDuration(event.currentTarget.duration))}
-            preload="metadata"
-            src={item.url}
-          />
+          previewActive ? <video
+              autoPlay
+              className="h-full w-full bg-black object-contain"
+              controls
+              onLoadedMetadata={(event) => {const duration=event.currentTarget.duration;setDetails(formatDuration(duration));if(!item.duration)rememberMetadata({duration});}}
+              preload="metadata"
+              src={item.url}
+            /> : <button className="grid h-full w-full place-items-center bg-gradient-to-br from-zinc-800 to-black text-white" onClick={()=>setPreviewActive(true)} type="button"><span className="grid h-14 w-14 place-items-center rounded-full bg-white/15 backdrop-blur"><Play className="ml-1" fill="currentColor" size={24}/></span><span className="sr-only">加载并预览视频 {item.name}</span></button>
         ) : (
           <div className="w-full px-5 text-center">
             <FileAudio className="mx-auto mb-5 text-pink-500" size={42} />
             <audio
               className="w-full"
               controls
-              onLoadedMetadata={(event) => setDetails(formatDuration(event.currentTarget.duration))}
-              preload="metadata"
+              onLoadedMetadata={(event) => {const duration=event.currentTarget.duration;setDetails(formatDuration(duration));if(!item.duration)rememberMetadata({duration});}}
+              preload="none"
               src={item.url}
             />
           </div>
@@ -76,9 +84,12 @@ function MediaCard({ item, onDeleted }: { item: AdminMediaItem; onDeleted: (path
         </span>
       </div>
       <div className="p-4">
-        <p className="truncate text-xs font-bold" title={item.name}>
-          {item.name}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 flex-1 truncate text-xs font-bold" title={item.name}>{item.name}</p>
+          <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${item.usageCount ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"}`}>
+            {item.usageCount ? `使用中 · ${item.usageCount} 处` : "未使用"}
+          </span>
+        </div>
         <p className="mt-1 text-[11px] text-zinc-400">
           {item.mime || "媒体文件"} · {(item.size / 1024 / 1024).toFixed(1)} MB
           {details ? ` · ${details}` : ""} · {item.createdAt.slice(0, 10)}
@@ -99,11 +110,14 @@ export function AdminMediaLibrary({ items, onItemsChange }: { items: AdminMediaI
   const role = useAdminRole();
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<MediaFilter>("all");
+  const [usageFilter,setUsageFilter]=useState<UsageFilter>("all");
+  const [sort,setSort]=useState<MediaSort>("newest");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [copiedPath, setCopiedPath] = useState("");
+  const [visibleLimit,setVisibleLimit]=useState(MEDIA_PAGE_SIZE);
   const counts = useMemo(
     () => ({
       all: items.length,
@@ -113,12 +127,15 @@ export function AdminMediaLibrary({ items, onItemsChange }: { items: AdminMediaI
     }),
     [items],
   );
+  const summary=useMemo(()=>({size:items.reduce((total,item)=>total+item.size,0),used:items.filter(item=>Boolean(item.usageCount)).length,unused:items.filter(item=>!item.usageCount).length}),[items]);
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const visibleItems = items.filter(
+  const filteredItems = items.filter(
     (item) =>
       (activeFilter === "all" || getMediaType(item) === activeFilter) &&
+      (usageFilter==="all"||(usageFilter==="used"?Boolean(item.usageCount):!item.usageCount))&&
       (!normalizedQuery || item.name.toLocaleLowerCase().includes(normalizedQuery)),
-  );
+  ).sort((a,b)=>sort==="oldest"?a.createdAt.localeCompare(b.createdAt):sort==="largest"?b.size-a.size:sort==="name"?a.name.localeCompare(b.name,"zh-CN"):b.createdAt.localeCompare(a.createdAt));
+  const visibleItems=filteredItems.slice(0,visibleLimit);
   const selectedVisibleCount = visibleItems.filter((item) => selected.has(item.path)).length;
   const allVisibleSelected = visibleItems.length > 0 && selectedVisibleCount === visibleItems.length;
 
@@ -186,6 +203,11 @@ export function AdminMediaLibrary({ items, onItemsChange }: { items: AdminMediaI
 
   return (
     <div className="mt-6">
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <div className="panel p-4"><p className="text-xs text-zinc-400">媒体总容量</p><b className="mt-1 block text-xl">{(summary.size/1024/1024).toFixed(1)} MB</b></div>
+        <div className="panel p-4"><p className="text-xs text-zinc-400">正在使用</p><b className="mt-1 block text-xl text-amber-600">{summary.used} 个</b></div>
+        <div className="panel p-4"><p className="text-xs text-zinc-400">可以检查清理</p><b className="mt-1 block text-xl text-emerald-600">{summary.unused} 个</b></div>
+      </div>
       <div
         aria-label="媒体类型筛选"
         className="panel flex gap-2 overflow-x-auto p-2"
@@ -202,7 +224,7 @@ export function AdminMediaLibrary({ items, onItemsChange }: { items: AdminMediaI
                   : "text-zinc-500 hover:bg-black/5 hover:text-zinc-900 dark:hover:bg-white/5 dark:hover:text-white"
               }`}
               key={filter.key}
-              onClick={() => setActiveFilter(filter.key)}
+              onClick={() => {setActiveFilter(filter.key);setVisibleLimit(MEDIA_PAGE_SIZE);}}
               type="button"
             >
               {filter.label}
@@ -214,8 +236,8 @@ export function AdminMediaLibrary({ items, onItemsChange }: { items: AdminMediaI
         })}
       </div>
 
-      <div className="panel mt-4 flex flex-col gap-3 p-3 lg:flex-row lg:items-center">
-        <label className="relative min-w-0 flex-1">
+      <div className="panel mt-4 grid gap-3 p-3 md:grid-cols-2 lg:grid-cols-[minmax(260px,1fr)_160px_160px_auto] lg:items-center">
+        <label className="relative min-w-0 md:col-span-2 lg:col-span-1">
           <Search
             aria-hidden="true"
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
@@ -224,16 +246,22 @@ export function AdminMediaLibrary({ items, onItemsChange }: { items: AdminMediaI
           <span className="sr-only">搜索媒体文件名</span>
           <input
             className="w-full rounded-xl border border-black/5 bg-black/[.025] py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-pink-400 dark:border-white/10 dark:bg-white/5"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {setQuery(event.target.value);setVisibleLimit(MEDIA_PAGE_SIZE);}}
             placeholder="搜索媒体文件名…"
             type="search"
             value={query}
           />
         </label>
+        <select aria-label="媒体使用状态" className="field min-w-0 lg:!w-40" onChange={event=>{setUsageFilter(event.target.value as UsageFilter);setVisibleLimit(MEDIA_PAGE_SIZE);}} value={usageFilter}>
+          <option value="all">全部用途</option><option value="used">使用中</option><option value="unused">未使用</option>
+        </select>
+        <select aria-label="媒体排序" className="field min-w-0 lg:!w-40" onChange={event=>{setSort(event.target.value as MediaSort);setVisibleLimit(MEDIA_PAGE_SIZE);}} value={sort}>
+          <option value="newest">最新上传</option><option value="oldest">最早上传</option><option value="largest">文件最大</option><option value="name">按文件名</option>
+        </select>
         {role === "admin" && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center justify-end gap-2 md:col-span-2 lg:col-span-1">
             <button
-              className="rounded-xl border border-black/10 px-3 py-2 text-xs font-bold text-zinc-600 transition hover:border-pink-300 hover:text-pink-500 dark:border-white/10 dark:text-zinc-300"
+              className="min-h-11 whitespace-nowrap rounded-xl border border-black/10 px-3 py-2 text-xs font-bold text-zinc-600 transition hover:border-pink-300 hover:text-pink-500 dark:border-white/10 dark:text-zinc-300"
               disabled={!visibleItems.length}
               onClick={toggleVisibleSelection}
               type="button"
@@ -241,7 +269,7 @@ export function AdminMediaLibrary({ items, onItemsChange }: { items: AdminMediaI
               {allVisibleSelected ? "取消全选" : "全选当前"}
             </button>
             <button
-              className="inline-flex items-center gap-1.5 rounded-xl bg-red-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-xl bg-red-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
               disabled={busy || selected.size === 0}
               onClick={() => void deleteSelected()}
               type="button"
@@ -295,6 +323,7 @@ export function AdminMediaLibrary({ items, onItemsChange }: { items: AdminMediaI
           </div>
         ))}
       </div>
+      {visibleItems.length<filteredItems.length&&<div className="mt-6 text-center"><button className="page-btn" onClick={()=>setVisibleLimit(value=>value+MEDIA_PAGE_SIZE)} type="button">加载更多（已显示 {visibleItems.length}/{filteredItems.length}）</button></div>}
     </div>
   );
 }

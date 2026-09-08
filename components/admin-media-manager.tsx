@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AdminMediaLibrary } from "@/components/admin-media-library";
 import { AdminMediaUpload, type MediaUploadResult } from "@/components/admin-media-upload";
 import type { AdminMediaItem } from "@/lib/admin-data";
+import { AdminMediaAudit } from "@/components/admin-media-audit";
 
 export function AdminMediaManager({ initialItems }: { initialItems: AdminMediaItem[] }) {
   const [items, setItems] = useState(initialItems);
@@ -24,6 +25,7 @@ export function AdminMediaManager({ initialItems }: { initialItems: AdminMediaIt
         </div>
         <AdminMediaUpload onUploaded={addUploadedItem} />
       </header>
+      <AdminMediaAudit />
       <AdminMediaLibrary items={items} onItemsChange={setItems} />
     </>
   );

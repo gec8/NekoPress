@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin";
-import { getMediaMime, getStoredMediaDisplayName } from "@/lib/media-types";
+import { isMissingMediaCatalog } from "@/lib/media-assets";
+import { getMediaKind, getMediaMime, getStoredMediaDisplayName } from "@/lib/media-types";
 import type { AdminArticle, AdminComment, AdminMoment, ArticleVersion, CarouselItem, CategoryItem, SiteSettings } from "@/lib/types";
 
 export type AdminDataResult<T> =
@@ -202,11 +203,16 @@ export async function getAdminMomentsPage(pageValue = 1): Promise<AdminDataResul
   return { ok: true, data: { items, page, pageSize: ADMIN_PAGE_SIZE, total, totalPages: Math.max(1, Math.ceil(total / ADMIN_PAGE_SIZE)) } };
 }
 
-export type AdminMediaItem = { name:string; path:string; url:string; createdAt:string; size:number; mime:string };
+export type AdminMediaItem = { name:string; path:string; url:string; createdAt:string; size:number; mime:string; width?:number; height?:number; duration?:number; usageCount?:number; status?:string };
 export async function getAdminMedia(): Promise<AdminDataResult<AdminMediaItem[]>> {
   const auth=await requireAdmin();
   if("error" in auth)return {ok:false,error:auth.error??"后台鉴权失败"};
   const bucket=process.env.SUPABASE_STORAGE_BUCKET||"media";
+  const indexed=await auth.admin.from("media_assets").select("path,public_url,original_name,mime_type,size_bytes,created_at,status,width,height,duration_seconds,media_references(count)").neq("status","trash").order("created_at",{ascending:false}).limit(1000);
+  if(!indexed.error&&indexed.data?.length){
+    return {ok:true,data:indexed.data.map(row=>{const references=Array.isArray(row.media_references)?row.media_references:[];return {name:String(row.original_name),path:String(row.path),url:String(row.public_url),createdAt:String(row.created_at??""),size:Number(row.size_bytes??0),mime:String(row.mime_type??""),width:row.width?Number(row.width):undefined,height:row.height?Number(row.height):undefined,duration:row.duration_seconds?Number(row.duration_seconds):undefined,status:String(row.status??"ready"),usageCount:Number(references[0]?.count??0)}})};
+  }
+  if(indexed.error&&!isMissingMediaCatalog(indexed.error))console.error("[media-catalog-index]",indexed.error);
   const listFolder = async (path: string, column: "name" | "created_at" = "name") => {
     const options = { limit: 100, sortBy: { column, order: "desc" as const } };
     let result = await auth.admin.storage.from(bucket).list(path, options);
@@ -223,7 +229,24 @@ export async function getAdminMedia(): Promise<AdminDataResult<AdminMediaItem[]>
     if(folderError)console.error("[admin-media-folder]",folder.name,folderError);
     return (data??[]).filter(file=>file.metadata).map(file=>{const path=`uploads/${folder.name}/${file.name}`;const storedName=file.metadata?.originalName??file.metadata?.metadata?.originalName;const metadataName=typeof storedName==="string"&&storedName.trim()?storedName:"";const name=metadataName||getStoredMediaDisplayName(path)||file.name;return {name,path,url:auth.admin.storage.from(bucket).getPublicUrl(path).data.publicUrl,createdAt:String(file.created_at??""),size:Number(file.metadata?.size??0),mime:getMediaMime(String(file.metadata?.mimetype??""),path)}});
   }))).flat().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  return {ok:true,data:files};
+  if(!files.length)return {ok:true,data:files};
+  const paths=files.map(file=>file.path);
+  let catalog=await auth.admin.from("media_assets").select("path,status,width,height,duration_seconds,media_references(count)").in("path",paths);
+  if(catalog.error){
+    if(!isMissingMediaCatalog(catalog.error))console.error("[media-catalog-read]",catalog.error);
+    return {ok:true,data:files};
+  }
+  const knownPaths=new Set((catalog.data??[]).map(row=>String(row.path)));
+  const missingFiles=files.filter(file=>!knownPaths.has(file.path));
+  if(missingFiles.length){
+    const now=new Date().toISOString();
+    const rows=missingFiles.map(file=>({path:file.path,public_url:file.url,original_name:file.name,mime_type:file.mime,media_type:getMediaKind(file.mime,file.path),size_bytes:file.size,status:"ready",created_at:file.createdAt||now,updated_at:now}));
+    const sync=await auth.admin.from("media_assets").upsert(rows,{onConflict:"path"});
+    if(sync.error&&!isMissingMediaCatalog(sync.error))console.error("[media-catalog-sync]",sync.error);
+    if(!sync.error)catalog=await auth.admin.from("media_assets").select("path,status,width,height,duration_seconds,media_references(count)").in("path",paths);
+  }
+  const catalogByPath=new Map((catalog.data??[]).map(row=>[String(row.path),row]));
+  return {ok:true,data:files.map(file=>{const row=catalogByPath.get(file.path);const references=Array.isArray(row?.media_references)?row.media_references:[];return {...file,width:row?.width?Number(row.width):undefined,height:row?.height?Number(row.height):undefined,duration:row?.duration_seconds?Number(row.duration_seconds):undefined,status:String(row?.status??"ready"),usageCount:Number(references[0]?.count??0)}})};
 }
 
 export async function getAdminCarousel(): Promise<AdminDataResult<CarouselItem[]>> {

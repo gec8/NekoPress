@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
+import { upsertMediaAsset } from "@/lib/media-assets";
 import { inspectMedia, MAX_MEDIA_BYTES } from "@/lib/media-validation";
 import { encodeMediaDisplayName, getMediaMime, normalizeMediaDisplayName } from "@/lib/media-types";
 import { consumeFixedWindow } from "@/lib/request-security";
+import { recordAdminAudit } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -31,6 +33,8 @@ export async function POST(req: Request) {
     if(!limit.allowed)return NextResponse.json({error:"上传过于频繁，请稍后重试"},{status:429,headers:{"Retry-After":String(limit.retryAfterSeconds)}});
     const form = await req.formData();
     const file = form.get("file");
+    const contentHashValue=form.get("contentHash");
+    const contentHash=typeof contentHashValue==="string"&&/^[a-f0-9]{64}$/.test(contentHashValue)?contentHashValue:undefined;
     if (!(file instanceof File)) return NextResponse.json({ error: "请选择媒体文件" }, { status: 400 });
     if (file.size > MAX_MEDIA_BYTES) return NextResponse.json({ error: "音视频不能超过 50MB，图片不能超过 8MB" }, { status: 413 });
     const bytes=Buffer.from(await file.arrayBuffer());
@@ -53,6 +57,18 @@ export async function POST(req: Request) {
     if (error) {console.error("[media-upload]",error);return NextResponse.json({ error:storageUploadMessage(error) }, { status: 500 });}
 
     const { data } = auth.admin.storage.from(bucket).getPublicUrl(objectPath);
+    await upsertMediaAsset(auth.admin, {
+      path: objectPath,
+      url: data.publicUrl,
+      name: displayName,
+      mime: inspection.info.mime,
+      size: file.size,
+      width: inspection.info.width,
+      height: inspection.info.height,
+      userId: auth.userId,
+      contentHash,
+    });
+    await recordAdminAudit(auth.admin,{actorId:auth.userId,actorEmail:auth.email,action:"upload",resource:"media",resourceId:objectPath,label:displayName,metadata:{kind:inspection.info.kind,mime:inspection.info.mime,size:file.size}});
     return NextResponse.json({
       url: data.publicUrl,
       name: displayName,
